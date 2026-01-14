@@ -9,6 +9,9 @@
   "scripts": {
     "start": "node bin/start.js"
   },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  },
   "keywords": [
     "proxy",
     "websocket",
