@@ -6,7 +6,7 @@ const net = require('net');
 
 const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
 const TARGET_PORT = parseInt(process.env.TARGET_PORT || '6901');
-const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '443');
+const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8000');
 
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
