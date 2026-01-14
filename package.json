@@ -4,10 +4,10 @@
   "description": "SSL/WS proxy: HTTP(S) to HTTPS WebSocket bridge for Kasm workspaces",
   "main": "index.js",
   "bin": {
-    "start": "./bin/start"
+    "start": "./bin/start.js"
   },
   "scripts": {
-    "start": "node bin/start"
+    "start": "node bin/start.js"
   },
   "keywords": [
     "proxy",
