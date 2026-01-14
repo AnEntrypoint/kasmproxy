@@ -8,6 +8,9 @@ const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
 const TARGET_PORT = parseInt(process.env.TARGET_PORT || '6901');
 const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8000');
 
+// Store credentials from successful HTTP auth to use for WebSocket
+let cachedAuth = null;
+
 const server = http.createServer((req, res) => {
   const options = {
     hostname: TARGET_HOST,
@@ -22,6 +25,11 @@ const server = http.createServer((req, res) => {
   };
 
   const proxyReq = https.request(options, (proxyRes) => {
+    // Cache auth credentials if request succeeds (non-401)
+    if (proxyRes.statusCode !== 401 && req.headers.authorization) {
+      cachedAuth = req.headers.authorization;
+      console.log('Cached auth credentials for WebSocket');
+    }
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
   });
@@ -36,6 +44,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.on('upgrade', (req, socket, head) => {
+  console.log('WebSocket upgrade:', req.url);
+
   const targetSocket = net.connect(TARGET_PORT, TARGET_HOST, () => {
     const secureSocket = tls.connect({
       socket: targetSocket,
@@ -43,6 +53,13 @@ server.on('upgrade', (req, socket, head) => {
       servername: TARGET_HOST
     }, () => {
       const headers = { ...req.headers, host: `${TARGET_HOST}:${TARGET_PORT}` };
+
+      // Inject cached auth if WebSocket request doesn't have auth
+      if (!headers.authorization && cachedAuth) {
+        headers.authorization = cachedAuth;
+        console.log('Injected cached auth into WebSocket');
+      }
+
       let upgradeRequest = `${req.method} ${req.url} HTTP/1.1\r\n`;
       for (const [key, value] of Object.entries(headers)) {
         upgradeRequest += `${key}: ${value}\r\n`;
