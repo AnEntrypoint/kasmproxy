@@ -1,0 +1,28 @@
+{
+  "name": "kasmproxy",
+  "version": "1.0.0",
+  "description": "SSL/WS proxy: HTTP(S) to HTTPS WebSocket bridge for Kasm workspaces",
+  "main": "index.js",
+  "bin": {
+    "start": "./bin/start"
+  },
+  "scripts": {
+    "start": "node bin/start"
+  },
+  "keywords": [
+    "proxy",
+    "websocket",
+    "ssl",
+    "https",
+    "kasm"
+  ],
+  "author": "AnEntrypoint",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AnEntrypoint/kasmproxy.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
