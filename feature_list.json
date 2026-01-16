@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-01-16T11:10:00Z",
+  "features": [
+    {
+      "id": "ROUTE_SSH",
+      "description": "/ssh endpoint routing to localhost:9999",
+      "passes": true,
+      "verified_via": "endpoint_test",
+      "status_code": 200
+    },
+    {
+      "id": "ROUTE_FILE",
+      "description": "/file endpoint routing to localhost:9998",
+      "passes": true,
+      "verified_via": "endpoint_test",
+      "status_code": 200
+    },
+    {
+      "id": "PATH_TRANSFORM",
+      "description": "Path transformation: /file → /files, /file/doc → /files/doc",
+      "passes": true,
+      "verified_via": "logic_test",
+      "transformations": [
+        { "from": "/file", "to": "/files" },
+        { "from": "/file/", "to": "/files/" },
+        { "from": "/file/doc.pdf", "to": "/files/doc.pdf" }
+      ]
+    },
+    {
+      "id": "VNC_PW_AUTH",
+      "description": "VNC_PW environment variable for HTTP Basic Authentication",
+      "passes": true,
+      "verified_via": "code_inspection",
+      "auth_format": "Basic :password_base64"
+    },
+    {
+      "id": "AUTH_CACHING",
+      "description": "Authentication credential caching for WebSocket persistence",
+      "passes": true,
+      "verified_via": "code_inspection",
+      "precedence": ["incoming_auth", "VNC_PW", "cached_auth"]
+    },
+    {
+      "id": "HTTP_PROTOCOL",
+      "description": "HTTP upstream protocol (not HTTPS/TLS)",
+      "passes": true,
+      "verified_via": "endpoint_test",
+      "protocol": "HTTP",
+      "note": "Upstream services use plain HTTP, not HTTPS"
+    },
+    {
+      "id": "WEBSOCKET_SUPPORT",
+      "description": "WebSocket upgrade handler for /ssh and /file",
+      "passes": true,
+      "verified_via": "code_inspection",
+      "handler": "server.on('upgrade')"
+    },
+    {
+      "id": "SUBPATH_ROUTING",
+      "description": "Subpath and query string routing",
+      "passes": true,
+      "verified_via": "logic_test",
+      "examples": [
+        "/ssh/console → localhost:9999/ssh/console",
+        "/ssh?session=123 → localhost:9999/ssh?session=123",
+        "/file/doc.pdf → localhost:9998/files/doc.pdf",
+        "/file?id=123 → localhost:9998/files?id=123"
+      ]
+    }
+  ],
+  "overall_status": "COMPLETE",
+  "all_passing": true
+}

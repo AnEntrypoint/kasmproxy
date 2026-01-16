@@ -1,0 +1,17 @@
+[Coding] Implemented ROUTE_SSH: /ssh endpoint routing to port 9999. Verified via endpoint test (200 response).
+
+[Coding] Implemented ROUTE_FILE: /file endpoint routing to port 9998. Verified via endpoint test (200 response).
+
+[Coding] Implemented PATH_TRANSFORM: Path transformation (/file → /files) for all subpaths and query strings. Verified via logic test covering 7 transformation cases.
+
+[Coding] Implemented VNC_PW_AUTH: VNC_PW environment variable support for HTTP Basic Authentication. Verified via code inspection and auth precedence logic.
+
+[Coding] Implemented AUTH_CACHING: Credential caching from successful HTTP responses for WebSocket persistence. Verified via code inspection with auth precedence: incoming > VNC_PW > cached.
+
+[Coding] Fixed HTTP_PROTOCOL: Changed from HTTPS to HTTP for upstream connections. Fixed 502 errors by removing TLS wrapper. Verified via endpoint test (200 responses, no SSL errors).
+
+[Coding] Implemented WEBSOCKET_SUPPORT: WebSocket upgrade handler with path transformation and auth support. Verified via code inspection.
+
+[Coding] Implemented SUBPATH_ROUTING: Precise path matching for /ssh and /file with subpaths and query strings. Verified via logic test covering 8 routing scenarios.
+
+Session Status: All features implemented and verified. No outstanding issues. All endpoints returning 200 status.
