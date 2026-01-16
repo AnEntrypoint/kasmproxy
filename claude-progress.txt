@@ -33,5 +33,7 @@ Session Status: All features implemented and verified. Proxy error for desk.acc.
   - /file/: Status 200 ✓
   - /file?query: Status 200 ✓
   - /file/nested: Status 404 (upstream 404, routing OK) ✓
-  
+
 Result: 8/8 endpoints working, 0 proxy errors (502), all paths routed correctly.
+
+[Coding] Fixed ROUTE_FILES_DIRECT: Added /files direct path routing to port 9998. Previously /files was not matched by routing rules and incorrectly routed to default port 6901 (kasmvnc), causing 404 errors. Now /files, /files/, and /files?query are properly routed to port 9998 without path transformation. Verified via endpoint test (200 response with HTML).

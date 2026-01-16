@@ -19,7 +19,9 @@ function getTargetPort(path) {
     return 9999;
   }
   // Match /file exactly, /file/, or /file?query
-  if (path === '/file' || path.startsWith('/file/') || path.startsWith('/file?')) {
+  // Also match /files (direct upstream path)
+  if (path === '/file' || path.startsWith('/file/') || path.startsWith('/file?') ||
+      path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
     return 9998;
   }
   return TARGET_PORT;
@@ -28,6 +30,11 @@ function getTargetPort(path) {
 // Helper function to transform path based on routing
 function getTargetPath(path, targetPort) {
   if (targetPort === 9998) {
+    // If path already starts with /files, keep it as-is (direct upstream path)
+    if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
+      return path;
+    }
+
     // Transform /file -> /files, /file/test -> /files/test, /file?x -> /files?x
     // But NOT /file/js, /file/css, /file/images, /file/webfonts, /file/api (these are rewritten assets/apis that resolve to root paths)
     if (path === '/file') return '/files';
@@ -90,9 +97,10 @@ function rewriteHtmlPaths(html, clientPath) {
 
 // Helper function to check if path requires auth
 function pathRequiresAuth(path) {
-  // Auth required for /ssh and /file routes
+  // Auth required for /ssh and /file routes (including /files direct path)
   return path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?') ||
-         path === '/file' || path.startsWith('/file/') || path.startsWith('/file?');
+         path === '/file' || path.startsWith('/file/') || path.startsWith('/file?') ||
+         path === '/files' || path.startsWith('/files/') || path.startsWith('/files?');
 }
 
 // Helper function to check auth header
