@@ -34,6 +34,13 @@ Some routes require path transformation:
 - `/file/test` → routes to port 9998 as `/files/test`
 - `/file?id=123` → routes to port 9998 as `/files?id=123`
 
+**CRITICAL**: The `/files` direct path must ALSO be routed to port 9998 WITHOUT transformation:
+- `/files` → routes to port 9998 as `/files` (no transform)
+- `/files/` → routes to port 9998 as `/files/` (no transform)
+- `/files?test=1` → routes to port 9998 as `/files?test=1` (no transform)
+
+**Gotcha**: If you only route `/file` paths, direct `/files` requests will route to the default port (6901 kasmvnc) causing 404 errors. You must explicitly route BOTH `/file` (with transform) AND `/files` (without transform) to port 9998.
+
 **CRITICAL**: Path transformation must be applied in BOTH handlers:
 1. HTTP request handler: `path: targetPath` in http.request options
 2. WebSocket upgrade handler: `${req.method} ${targetPath}` in the upgrade request line
@@ -61,7 +68,7 @@ Not updating this header will cause requests to still reference the wrong port i
 
 ### VNC_PW Environment Variable
 
-Basic auth is automatically added to `/ssh` and `/file` routes when `VNC_PW` is set:
+Basic auth is automatically added to `/ssh`, `/file`, and `/files` routes when `VNC_PW` is set:
 - Credentials format: `kasm_user` username + VNC_PW as password
 - Base64 encoded: `Basic a2FzbV91c2VyOmZvb2Jhcg==` (for username "kasm_user" and password "foobar")
 - Header: `Authorization: Basic BASE64_ENCODED_CREDENTIALS`
@@ -69,8 +76,8 @@ Basic auth is automatically added to `/ssh` and `/file` routes when `VNC_PW` is 
 ### Auth Enforcement on Proxy
 
 When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on both:
-1. HTTP requests to `/ssh` and `/file` routes (returns 401 if auth invalid)
-2. WebSocket upgrade requests to `/ssh` and `/file` routes (closes connection if auth invalid)
+1. HTTP requests to `/ssh`, `/file`, and `/files` routes (returns 401 if auth invalid)
+2. WebSocket upgrade requests to `/ssh`, `/file`, and `/files` routes (closes connection if auth invalid)
 
 ### Auth Header Precedence
 
