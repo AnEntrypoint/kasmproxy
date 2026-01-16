@@ -29,13 +29,14 @@ function getTargetPort(path) {
 function getTargetPath(path, targetPort) {
   if (targetPort === 9998) {
     // Transform /file -> /files, /file/test -> /files/test, /file?x -> /files?x
-    // But NOT /file/js, /file/css (these are rewritten assets that resolve to /js, /css)
+    // But NOT /file/js, /file/css, /file/images, /file/webfonts, /file/api (these are rewritten assets/apis that resolve to root paths)
     if (path === '/file') return '/files';
     if (path.startsWith('/file/')) {
-      // Check if this looks like an asset path (has known asset directory)
-      if (path.startsWith('/file/js/') || path.startsWith('/file/css/') || path.startsWith('/file/images/')) {
-        // This is a rewritten asset - strip /file prefix to get actual path
-        return path.substring(5); // /file/js/x -> /js/x
+      // Check if this is an asset path or API call (has known directories or /api prefix)
+      if (path.startsWith('/file/js/') || path.startsWith('/file/css/') || path.startsWith('/file/images/') ||
+          path.startsWith('/file/webfonts/') || path.startsWith('/file/api/')) {
+        // This is a rewritten asset or API call - strip /file prefix to get actual path
+        return path.substring(5); // /file/js/x -> /js/x, /file/api/x -> /api/x
       }
       return '/files' + path.substring(5);
     }
@@ -54,8 +55,8 @@ function isPlainHttpPort(port) {
 // Helper function to get basic auth header
 function getBasicAuth() {
   if (!VNC_PW) return null;
-  // Use empty username with VNC password
-  const credentials = ':' + VNC_PW;
+  // Use kasm_user username with VNC password
+  const credentials = 'kasm_user:' + VNC_PW;
   const encoded = Buffer.from(credentials).toString('base64');
   return 'Basic ' + encoded;
 }
@@ -72,14 +73,57 @@ function rewriteHtmlPaths(html, clientPath) {
   // Pattern: src/href followed by optional whitespace, =, optional whitespace, ", optional relative path, "
   // Relative paths: don't start with /, http://, or https://
 
-  return html
+  let rewritten = html
     .replace(/\b(src|href)=["'](?!\/|http|\/\/|data:)([^"']+)["']/g, (match, attr, path) => {
       // Rewrite relative path to be prefixed with the client path
       return `${attr}="${clientPath}/${path}"`;
     });
+
+  // Also rewrite hardcoded WebSocket URLs in JavaScript config
+  // Replace "url":"http://localhost:9999" with "url":""
+  // Empty URL tells socket.io to use the current page's origin/protocol
+  // This makes the WebSocket connect through the proxy instead of directly to localhost
+  rewritten = rewritten.replace(/"url":"http:\/\/localhost:\d+"/g, '"url":""');
+
+  return rewritten;
+}
+
+// Helper function to check if path requires auth
+function pathRequiresAuth(path) {
+  // Auth required for /ssh and /file routes
+  return path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?') ||
+         path === '/file' || path.startsWith('/file/') || path.startsWith('/file?');
+}
+
+// Helper function to check auth header
+function checkAuth(authHeader) {
+  if (!authHeader) return false;
+  const [scheme, credentials] = authHeader.split(' ');
+  if (scheme !== 'Basic') return false;
+
+  try {
+    const decoded = Buffer.from(credentials, 'base64').toString();
+    // Expected format: kasm_user:VNC_PW
+    if (decoded !== 'kasm_user:' + VNC_PW) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const server = http.createServer((req, res) => {
+  // Check auth if VNC_PW is set and this path requires auth
+  if (VNC_PW && pathRequiresAuth(req.url)) {
+    if (!checkAuth(req.headers.authorization)) {
+      res.writeHead(401, {
+        'WWW-Authenticate': 'Basic realm="kasmproxy"',
+        'Content-Type': 'text/plain'
+      });
+      res.end('Unauthorized');
+      return;
+    }
+  }
+
   const targetPort = getTargetPort(req.url);
   const targetPath = getTargetPath(req.url, targetPort);
   const clientPath = req.url.split('?')[0]; // Get path without query string
@@ -123,6 +167,8 @@ const server = http.createServer((req, res) => {
     const contentType = proxyRes.headers['content-type'] || '';
     const isHtml = contentType.includes('text/html');
 
+    console.log(`[HTTP] ${req.method} ${req.url} -> ${targetPort}${targetPath} | CT: ${contentType} | HTML: ${isHtml}`);
+
     if (isHtml) {
       // Collect the full body, rewrite it, then send it
       let body = '';
@@ -134,6 +180,11 @@ const server = http.createServer((req, res) => {
       proxyRes.on('end', () => {
         // Rewrite relative paths
         const rewrittenBody = rewriteHtmlPaths(body, clientPath);
+
+        // Log if rewrite changed anything
+        if (body !== rewrittenBody) {
+          console.log(`[REWRITE] Body changed, old size: ${body.length}, new size: ${rewrittenBody.length}`);
+        }
 
         // Update content-length since body may have changed
         res.writeHead(proxyRes.statusCode, {
@@ -160,6 +211,15 @@ const server = http.createServer((req, res) => {
 
 server.on('upgrade', (req, socket, head) => {
   console.log('WebSocket upgrade:', req.url);
+
+  // Check auth if VNC_PW is set and this path requires auth
+  if (VNC_PW && pathRequiresAuth(req.url)) {
+    if (!checkAuth(req.headers.authorization)) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="kasmproxy"\r\nContent-Length: 0\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+  }
 
   const targetPort = getTargetPort(req.url);
   const targetPath = getTargetPath(req.url, targetPort);
