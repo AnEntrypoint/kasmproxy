@@ -85,11 +85,9 @@ function rewriteHtmlPaths(html, clientPath) {
 }
 
 // Helper function to check if path requires auth
-function pathRequiresAuth(path) {
-  // Auth required for /ssh, /files, and /api routes
-  return path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?') ||
-         path === '/files' || path.startsWith('/files/') || path.startsWith('/files?') ||
-         path === '/api' || path.startsWith('/api/') || path.startsWith('/api?');
+function pathRequiresAuth(path, targetPort) {
+  // Auth required for ALL routes when VNC_PW is set
+  return true;
 }
 
 // Helper function to check auth header
@@ -109,8 +107,12 @@ function checkAuth(authHeader) {
 }
 
 const server = http.createServer((req, res) => {
-  // Check auth if VNC_PW is set and this path requires auth
-  if (VNC_PW && pathRequiresAuth(req.url)) {
+  const targetPort = getTargetPort(req.url);
+  const targetPath = getTargetPath(req.url, targetPort);
+  const clientPath = req.url.split('?')[0]; // Get path without query string
+
+  // Check auth if VNC_PW is set and this port requires auth
+  if (VNC_PW && pathRequiresAuth(req.url, targetPort)) {
     if (!checkAuth(req.headers.authorization)) {
       res.writeHead(401, {
         'WWW-Authenticate': 'Basic realm="kasmproxy"',
@@ -120,10 +122,6 @@ const server = http.createServer((req, res) => {
       return;
     }
   }
-
-  const targetPort = getTargetPort(req.url);
-  const targetPath = getTargetPath(req.url, targetPort);
-  const clientPath = req.url.split('?')[0]; // Get path without query string
 
   const headers = {
     ...req.headers,
@@ -209,18 +207,18 @@ const server = http.createServer((req, res) => {
 server.on('upgrade', (req, socket, head) => {
   console.log('WebSocket upgrade:', req.url);
 
-  // Check auth if VNC_PW is set and this path requires auth
-  if (VNC_PW && pathRequiresAuth(req.url)) {
+  const targetPort = getTargetPort(req.url);
+  const targetPath = getTargetPath(req.url, targetPort);
+  const isPlainHttp = isPlainHttpPort(targetPort);
+
+  // Check auth if VNC_PW is set and this port requires auth
+  if (VNC_PW && pathRequiresAuth(req.url, targetPort)) {
     if (!checkAuth(req.headers.authorization)) {
       socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="kasmproxy"\r\nContent-Length: 0\r\n\r\n');
       socket.destroy();
       return;
     }
   }
-
-  const targetPort = getTargetPort(req.url);
-  const targetPath = getTargetPath(req.url, targetPort);
-  const isPlainHttp = isPlainHttpPort(targetPort);
 
   console.log(`[WS] Routing to ${TARGET_HOST}:${targetPort}${targetPath}`);
 
