@@ -7,6 +7,7 @@ const net = require('net');
 const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
 const TARGET_PORT = parseInt(process.env.TARGET_PORT || '6901');
 const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8000');
+const VNC_PW = process.env.VNC_PW || '';
 
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
@@ -17,27 +18,62 @@ function getTargetPort(path) {
   if (path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')) {
     return 9999;
   }
+  // Match /file exactly, /file/, or /file?query
+  if (path === '/file' || path.startsWith('/file/') || path.startsWith('/file?')) {
+    return 9998;
+  }
   return TARGET_PORT;
+}
+
+// Helper function to transform path based on routing
+function getTargetPath(path, targetPort) {
+  if (targetPort === 9998) {
+    // Transform /file -> /files, /file/test -> /files/test, /file?x -> /files?x
+    if (path === '/file') return '/files';
+    if (path.startsWith('/file/')) return '/files' + path.substring(5);
+    if (path.startsWith('/file?')) return '/files' + path.substring(5);
+  }
+  // For /ssh and default port, keep path as-is
+  return path;
+}
+
+// Helper function to get basic auth header
+function getBasicAuth() {
+  if (!VNC_PW) return null;
+  // Use empty username with VNC password
+  const credentials = ':' + VNC_PW;
+  const encoded = Buffer.from(credentials).toString('base64');
+  return 'Basic ' + encoded;
 }
 
 const server = http.createServer((req, res) => {
   const targetPort = getTargetPort(req.url);
+  const targetPath = getTargetPath(req.url, targetPort);
+
+  const headers = {
+    ...req.headers,
+    host: `${TARGET_HOST}:${targetPort}`
+  };
+
+  // Add basic auth if VNC_PW is set and not already authenticated
+  const basicAuth = getBasicAuth();
+  if (basicAuth && !headers.authorization) {
+    headers.authorization = basicAuth;
+  }
+
   const options = {
     hostname: TARGET_HOST,
     port: targetPort,
-    path: req.url,
+    path: targetPath,
     method: req.method,
-    headers: {
-      ...req.headers,
-      host: `${TARGET_HOST}:${targetPort}`
-    },
+    headers,
     rejectUnauthorized: false
   };
 
   const proxyReq = https.request(options, (proxyRes) => {
     // Cache auth credentials if request succeeds (non-401)
-    if (proxyRes.statusCode !== 401 && req.headers.authorization) {
-      cachedAuth = req.headers.authorization;
+    if (proxyRes.statusCode !== 401 && headers.authorization) {
+      cachedAuth = headers.authorization;
       console.log('Cached auth credentials for WebSocket');
     }
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
@@ -57,6 +93,8 @@ server.on('upgrade', (req, socket, head) => {
   console.log('WebSocket upgrade:', req.url);
 
   const targetPort = getTargetPort(req.url);
+  const targetPath = getTargetPath(req.url, targetPort);
+
   const targetSocket = net.connect(targetPort, TARGET_HOST, () => {
     const secureSocket = tls.connect({
       socket: targetSocket,
@@ -65,13 +103,19 @@ server.on('upgrade', (req, socket, head) => {
     }, () => {
       const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
 
+      // Add basic auth if VNC_PW is set and not already authenticated
+      const basicAuth = getBasicAuth();
+      if (basicAuth && !headers.authorization) {
+        headers.authorization = basicAuth;
+      }
+
       // Inject cached auth if WebSocket request doesn't have auth
       if (!headers.authorization && cachedAuth) {
         headers.authorization = cachedAuth;
         console.log('Injected cached auth into WebSocket');
       }
 
-      let upgradeRequest = `${req.method} ${req.url} HTTP/1.1\r\n`;
+      let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
       for (const [key, value] of Object.entries(headers)) {
         upgradeRequest += `${key}: ${value}\r\n`;
       }
