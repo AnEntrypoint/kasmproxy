@@ -29,8 +29,16 @@ function getTargetPort(path) {
 function getTargetPath(path, targetPort) {
   if (targetPort === 9998) {
     // Transform /file -> /files, /file/test -> /files/test, /file?x -> /files?x
+    // But NOT /file/js, /file/css (these are rewritten assets that resolve to /js, /css)
     if (path === '/file') return '/files';
-    if (path.startsWith('/file/')) return '/files' + path.substring(5);
+    if (path.startsWith('/file/')) {
+      // Check if this looks like an asset path (has known asset directory)
+      if (path.startsWith('/file/js/') || path.startsWith('/file/css/') || path.startsWith('/file/images/')) {
+        // This is a rewritten asset - strip /file prefix to get actual path
+        return path.substring(5); // /file/js/x -> /js/x
+      }
+      return '/files' + path.substring(5);
+    }
     if (path.startsWith('/file?')) return '/files' + path.substring(5);
   }
   // For /ssh and default port, keep path as-is
@@ -52,9 +60,29 @@ function getBasicAuth() {
   return 'Basic ' + encoded;
 }
 
+// Helper function to rewrite relative paths in HTML for routing
+function rewriteHtmlPaths(html, clientPath) {
+  if (!clientPath || clientPath === '/') return html;
+
+  // Only rewrite relative paths that don't start with / or http
+  // This handles: src="js/file.js" -> src="/file/js/file.js"
+  // And: href="css/style.css" -> href="/file/css/style.css"
+  // But NOT: src="/js/file.js" or href="http://..."
+
+  // Pattern: src/href followed by optional whitespace, =, optional whitespace, ", optional relative path, "
+  // Relative paths: don't start with /, http://, or https://
+
+  return html
+    .replace(/\b(src|href)=["'](?!\/|http|\/\/|data:)([^"']+)["']/g, (match, attr, path) => {
+      // Rewrite relative path to be prefixed with the client path
+      return `${attr}="${clientPath}/${path}"`;
+    });
+}
+
 const server = http.createServer((req, res) => {
   const targetPort = getTargetPort(req.url);
   const targetPath = getTargetPath(req.url, targetPort);
+  const clientPath = req.url.split('?')[0]; // Get path without query string
 
   const headers = {
     ...req.headers,
@@ -90,8 +118,35 @@ const server = http.createServer((req, res) => {
       cachedAuth = headers.authorization;
       console.log('Cached auth credentials for WebSocket');
     }
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    proxyRes.pipe(res);
+
+    // Check if we need to rewrite the response body
+    const contentType = proxyRes.headers['content-type'] || '';
+    const isHtml = contentType.includes('text/html');
+
+    if (isHtml) {
+      // Collect the full body, rewrite it, then send it
+      let body = '';
+
+      proxyRes.on('data', (chunk) => {
+        body += chunk.toString();
+      });
+
+      proxyRes.on('end', () => {
+        // Rewrite relative paths
+        const rewrittenBody = rewriteHtmlPaths(body, clientPath);
+
+        // Update content-length since body may have changed
+        res.writeHead(proxyRes.statusCode, {
+          ...proxyRes.headers,
+          'content-length': Buffer.byteLength(rewrittenBody)
+        });
+        res.end(rewrittenBody);
+      });
+    } else {
+      // For non-HTML, just pass through
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    }
   });
 
   proxyReq.on('error', (e) => {
@@ -110,7 +165,11 @@ server.on('upgrade', (req, socket, head) => {
   const targetPath = getTargetPath(req.url, targetPort);
   const isPlainHttp = isPlainHttpPort(targetPort);
 
+  console.log(`[WS] Routing to ${TARGET_HOST}:${targetPort}${targetPath}`);
+
   const targetSocket = net.connect(targetPort, TARGET_HOST, () => {
+    console.log('[WS] Connected to upstream');
+
     // For HTTPS ports, wrap with TLS. For HTTP ports, use socket directly.
     const workingSocket = isPlainHttp ? targetSocket : tls.connect({
       socket: targetSocket,
@@ -119,6 +178,8 @@ server.on('upgrade', (req, socket, head) => {
     });
 
     const handleConnection = () => {
+      console.log('[WS] Upstream connection ready');
+
       const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
 
       // Add basic auth if VNC_PW is set and not already authenticated
@@ -133,32 +194,64 @@ server.on('upgrade', (req, socket, head) => {
         console.log('Injected cached auth into WebSocket');
       }
 
+      // Build the upgrade request
       let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
       for (const [key, value] of Object.entries(headers)) {
         upgradeRequest += `${key}: ${value}\r\n`;
       }
       upgradeRequest += '\r\n';
 
+      console.log('[WS] Sending upgrade request to upstream');
       workingSocket.write(upgradeRequest);
-      if (head.length) workingSocket.write(head);
+      if (head.length) {
+        workingSocket.write(head);
+        console.log('[WS] Sent head frame');
+      }
 
+      // Pipe data both directions
       workingSocket.pipe(socket);
       socket.pipe(workingSocket);
+      console.log('[WS] Streams piped');
 
-      workingSocket.on('error', () => socket.destroy());
+      workingSocket.on('error', (err) => {
+        console.error('[WS] Upstream socket error:', err.message);
+        socket.destroy();
+      });
+
+      socket.on('error', (err) => {
+        console.error('[WS] Client socket error:', err.message);
+        workingSocket.destroy();
+      });
     };
 
     if (isPlainHttp) {
       // For plain HTTP, connection is ready immediately
+      console.log('[WS] Plain HTTP - connection ready immediately');
       handleConnection();
     } else {
       // For TLS, wait for secure connection
-      workingSocket.on('secureConnect', handleConnection);
+      console.log('[WS] HTTPS - waiting for secureConnect');
+      workingSocket.on('secureConnect', () => {
+        console.log('[WS] TLS handshake complete');
+        handleConnection();
+      });
+
+      workingSocket.on('error', (err) => {
+        console.error('[WS] TLS error:', err.message);
+        socket.destroy();
+      });
     }
   });
 
-  targetSocket.on('error', () => socket.destroy());
-  socket.on('error', () => targetSocket.destroy());
+  targetSocket.on('error', (err) => {
+    console.error('[WS] Upstream connection error:', err.message);
+    socket.destroy();
+  });
+
+  socket.on('error', (err) => {
+    console.error('[WS] Client socket error during setup:', err.message);
+    targetSocket.destroy();
+  });
 });
 
 server.listen(LISTEN_PORT, () => {
