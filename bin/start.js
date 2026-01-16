@@ -18,10 +18,9 @@ function getTargetPort(path) {
   if (path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')) {
     return 9999;
   }
-  // Match /file exactly, /file/, or /file?query
-  // Also match /files (direct upstream path)
-  if (path === '/file' || path.startsWith('/file/') || path.startsWith('/file?') ||
-      path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
+  // Match /files and /api routes to port 9998
+  if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?') ||
+      path === '/api' || path.startsWith('/api/') || path.startsWith('/api?')) {
     return 9998;
   }
   return TARGET_PORT;
@@ -30,26 +29,16 @@ function getTargetPort(path) {
 // Helper function to transform path based on routing
 function getTargetPath(path, targetPort) {
   if (targetPort === 9998) {
-    // If path already starts with /files, keep it as-is (direct upstream path)
-    if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
-      return path;
+    // Assets are at root paths on upstream (e.g., /js/app.js, /css/style.css)
+    // But browser requests them as /files/js/app.js, /files/css/style.css
+    // Strip /files prefix for asset directories
+    if (path.startsWith('/files/js/') || path.startsWith('/files/css/') ||
+        path.startsWith('/files/images/') || path.startsWith('/files/webfonts/') ||
+        path.startsWith('/files/api/')) {
+      return path.substring(6); // /files/js/x -> /js/x
     }
-
-    // Transform /file -> /files, /file/test -> /files/test, /file?x -> /files?x
-    // But NOT /file/js, /file/css, /file/images, /file/webfonts, /file/api (these are rewritten assets/apis that resolve to root paths)
-    if (path === '/file') return '/files';
-    if (path.startsWith('/file/')) {
-      // Check if this is an asset path or API call (has known directories or /api prefix)
-      if (path.startsWith('/file/js/') || path.startsWith('/file/css/') || path.startsWith('/file/images/') ||
-          path.startsWith('/file/webfonts/') || path.startsWith('/file/api/')) {
-        // This is a rewritten asset or API call - strip /file prefix to get actual path
-        return path.substring(5); // /file/js/x -> /js/x, /file/api/x -> /api/x
-      }
-      return '/files' + path.substring(5);
-    }
-    if (path.startsWith('/file?')) return '/files' + path.substring(5);
   }
-  // For /ssh and default port, keep path as-is
+  // All other paths pass through as-is
   return path;
 }
 
@@ -97,10 +86,10 @@ function rewriteHtmlPaths(html, clientPath) {
 
 // Helper function to check if path requires auth
 function pathRequiresAuth(path) {
-  // Auth required for /ssh and /file routes (including /files direct path)
+  // Auth required for /ssh, /files, and /api routes
   return path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?') ||
-         path === '/file' || path.startsWith('/file/') || path.startsWith('/file?') ||
-         path === '/files' || path.startsWith('/files/') || path.startsWith('/files?');
+         path === '/files' || path.startsWith('/files/') || path.startsWith('/files?') ||
+         path === '/api' || path.startsWith('/api/') || path.startsWith('/api?');
 }
 
 // Helper function to check auth header
