@@ -57,3 +57,8 @@ The auth header is only added if the incoming request doesn't already have autho
 - Path matching is precise: `path === '/path' || path.startsWith('/path/') || path.startsWith('/path?')`
 - WebSocket upgrade requests receive transformed paths (e.g., `/file` → `/files`)
 - Cached credentials from successful HTTP requests are reused for WebSocket auth
+- **Upstream protocol selection is dynamic per-port:**
+  - Port 9999 (/ssh): HTTP protocol
+  - Port 9998 (/file): HTTP protocol
+  - Port 6901 (kasmvnc) and others: HTTPS protocol
+

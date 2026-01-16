@@ -1,14 +1,17 @@
 # Implementation Notes
 
-## Upstream Protocol: HTTP Not HTTPS
+## Upstream Protocol: Dynamic Per-Port Selection
 
-**CRITICAL**: Upstream services are accessed via plain HTTP, not HTTPS.
+**CRITICAL**: Upstream protocols are selected dynamically based on target port:
 
-The proxy receives HTTPS connections from browsers but forwards requests to upstream services (localhost:9999, localhost:9998, etc.) using HTTP:
-- HTTP handler: Uses `http.request()` for upstream connections
-- WebSocket handler: Uses plain `net.connect()` without TLS wrapper
+- **Ports 9999 (/ssh) and 9998 (/file)**: Plain HTTP via `http.request()` and raw `net.connect()`
+- **Port 6901 (kasmvnc) and other ports**: HTTPS via `https.request()` with TLS wrapping
 
-Attempting to use HTTPS/TLS for upstream connections will cause SSL handshake errors and 502 Bad Gateway responses. The TLS connection only exists between browser and proxy, not proxy to upstream.
+The proxy receives HTTPS connections from browsers but uses different protocols for upstream depending on the service:
+- HTTP handler: Chooses `http.request()` or `https.request()` based on `isPlainHttpPort(targetPort)`
+- WebSocket handler: Chooses plain socket or TLS-wrapped socket based on `isPlainHttpPort(targetPort)`
+
+Attempting to use the wrong protocol (HTTPS for HTTP services, or HTTP for HTTPS services) will cause SSL handshake errors and 502 Bad Gateway responses.
 
 ## Path Routing & Transformation
 
