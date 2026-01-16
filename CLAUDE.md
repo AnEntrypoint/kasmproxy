@@ -62,9 +62,15 @@ Not updating this header will cause requests to still reference the wrong port i
 ### VNC_PW Environment Variable
 
 Basic auth is automatically added to `/ssh` and `/file` routes when `VNC_PW` is set:
-- Credentials format: empty username + VNC_PW as password
-- Base64 encoded: `Basic Zm9vYmFy` (for password "foobar")
-- Header: `Authorization: Basic :BASE64_ENCODED_PASSWORD`
+- Credentials format: `kasm_user` username + VNC_PW as password
+- Base64 encoded: `Basic a2FzbV91c2VyOmZvb2Jhcg==` (for username "kasm_user" and password "foobar")
+- Header: `Authorization: Basic BASE64_ENCODED_CREDENTIALS`
+
+### Auth Enforcement on Proxy
+
+When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on both:
+1. HTTP requests to `/ssh` and `/file` routes (returns 401 if auth invalid)
+2. WebSocket upgrade requests to `/ssh` and `/file` routes (closes connection if auth invalid)
 
 ### Auth Header Precedence
 

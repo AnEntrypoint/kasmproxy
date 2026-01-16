@@ -50,7 +50,7 @@ These routes do NOT get special paths matching (e.g., `/sshs` does not match `/s
 If `VNC_PW` environment variable is set, HTTP Basic Authentication is automatically added to:
 - All `/ssh` requests
 - All `/file` requests
-- Uses empty username with `VNC_PW` as the password (credentials: `:VNC_PW`)
+- Uses username `kasm_user` with `VNC_PW` as the password (credentials: `kasm_user:VNC_PW`)
 
 The auth header is only added if the incoming request doesn't already have authorization.
 
