@@ -76,7 +76,7 @@ const server = http.createServer((req, res) => {
     rejectUnauthorized: false
   };
 
-  const proxyReq = https.request(options, (proxyRes) => {
+  const proxyReq = http.request(options, (proxyRes) => {
     // Cache auth credentials if request succeeds (non-401)
     if (proxyRes.statusCode !== 401 && headers.authorization) {
       cachedAuth = headers.authorization;
@@ -102,39 +102,33 @@ server.on('upgrade', (req, socket, head) => {
   const targetPath = getTargetPath(req.url, targetPort);
 
   const targetSocket = net.connect(targetPort, TARGET_HOST, () => {
-    const secureSocket = tls.connect({
-      socket: targetSocket,
-      rejectUnauthorized: false,
-      servername: TARGET_HOST
-    }, () => {
-      const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
+    const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
 
-      // Add basic auth if VNC_PW is set and not already authenticated
-      const basicAuth = getBasicAuth();
-      if (basicAuth && !headers.authorization) {
-        headers.authorization = basicAuth;
-      }
+    // Add basic auth if VNC_PW is set and not already authenticated
+    const basicAuth = getBasicAuth();
+    if (basicAuth && !headers.authorization) {
+      headers.authorization = basicAuth;
+    }
 
-      // Inject cached auth if WebSocket request doesn't have auth
-      if (!headers.authorization && cachedAuth) {
-        headers.authorization = cachedAuth;
-        console.log('Injected cached auth into WebSocket');
-      }
+    // Inject cached auth if WebSocket request doesn't have auth
+    if (!headers.authorization && cachedAuth) {
+      headers.authorization = cachedAuth;
+      console.log('Injected cached auth into WebSocket');
+    }
 
-      let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
-      for (const [key, value] of Object.entries(headers)) {
-        upgradeRequest += `${key}: ${value}\r\n`;
-      }
-      upgradeRequest += '\r\n';
+    let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
+    for (const [key, value] of Object.entries(headers)) {
+      upgradeRequest += `${key}: ${value}\r\n`;
+    }
+    upgradeRequest += '\r\n';
 
-      secureSocket.write(upgradeRequest);
-      if (head.length) secureSocket.write(head);
+    targetSocket.write(upgradeRequest);
+    if (head.length) targetSocket.write(head);
 
-      secureSocket.pipe(socket);
-      socket.pipe(secureSocket);
+    targetSocket.pipe(socket);
+    socket.pipe(targetSocket);
 
-      secureSocket.on('error', () => socket.destroy());
-    });
+    targetSocket.on('error', () => socket.destroy());
   });
 
   targetSocket.on('error', () => socket.destroy());
