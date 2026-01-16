@@ -4,7 +4,7 @@
 
 **CRITICAL**: Upstream protocols are selected dynamically based on target port:
 
-- **Ports 9999 (/ssh) and 9998 (/file)**: Plain HTTP via `http.request()` and raw `net.connect()`
+- **Ports 9999 (/ssh) and 9998 (/files, /api)**: Plain HTTP via `http.request()` and raw `net.connect()`
 - **Port 6901 (kasmvnc) and other ports**: HTTPS via `https.request()` with TLS wrapping
 
 The proxy receives HTTPS connections from browsers but uses different protocols for upstream depending on the service:
@@ -27,19 +27,15 @@ The correct approach handles:
 - Query strings: `/ssh?param=value`
 - Does NOT match: `/sshs`, `/sshfish`, `/ssh2`
 
-### Path Transformation
+### Path Transformation for Assets
 
-Some routes require path transformation:
-- `/file` → routes to port 9998 with path transformed to `/files`
-- `/file/test` → routes to port 9998 as `/files/test`
-- `/file?id=123` → routes to port 9998 as `/files?id=123`
+Asset requests under `/files` are transformed to root paths on upstream:
+- `/files/js/app.js` → routes to port 9998 as `/js/app.js` (strip `/files` prefix)
+- `/files/css/style.css` → routes to port 9998 as `/css/style.css` (strip `/files` prefix)
+- `/files/images/logo.png` → routes to port 9998 as `/images/logo.png` (strip `/files` prefix)
+- `/files/webfonts/font.woff` → routes to port 9998 as `/webfonts/font.woff` (strip `/files` prefix)
 
-**CRITICAL**: The `/files` direct path must ALSO be routed to port 9998 WITHOUT transformation:
-- `/files` → routes to port 9998 as `/files` (no transform)
-- `/files/` → routes to port 9998 as `/files/` (no transform)
-- `/files?test=1` → routes to port 9998 as `/files?test=1` (no transform)
-
-**Gotcha**: If you only route `/file` paths, direct `/files` requests will route to the default port (6901 kasmvnc) causing 404 errors. You must explicitly route BOTH `/file` (with transform) AND `/files` (without transform) to port 9998.
+**CRITICAL**: The upstream file manager (port 9998) has assets at root paths (`/js/`, `/css/`), NOT under `/files/`. Asset directory requests must strip the `/files` prefix to get the correct upstream path.
 
 **CRITICAL**: Path transformation must be applied in BOTH handlers:
 1. HTTP request handler: `path: targetPath` in http.request options
@@ -68,16 +64,16 @@ Not updating this header will cause requests to still reference the wrong port i
 
 ### VNC_PW Environment Variable
 
-Basic auth is automatically added to `/ssh`, `/file`, and `/files` routes when `VNC_PW` is set:
+Basic auth is automatically added to `/ssh`, `/files`, and `/api` routes when `VNC_PW` is set:
 - Credentials format: `kasm_user` username + VNC_PW as password
 - Base64 encoded: `Basic a2FzbV91c2VyOmZvb2Jhcg==` (for username "kasm_user" and password "foobar")
 - Header: `Authorization: Basic BASE64_ENCODED_CREDENTIALS`
 
 ### Auth Enforcement on Proxy
 
-When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on both:
-1. HTTP requests to `/ssh`, `/file`, and `/files` routes (returns 401 if auth invalid)
-2. WebSocket upgrade requests to `/ssh`, `/file`, and `/files` routes (closes connection if auth invalid)
+When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on:
+1. HTTP requests to `/ssh`, `/files`, and `/api` routes (returns 401 if auth invalid)
+2. WebSocket upgrade requests to `/ssh`, `/files`, and `/api` routes (closes connection if auth invalid)
 
 ### Auth Header Precedence
 
@@ -103,16 +99,16 @@ WebSocket auth is cached from successful HTTP responses:
 When proxying responses that contain HTML with relative asset paths, they must be rewritten to be relative to the proxy path:
 
 **Problem**: Upstream returns `src="js/app.js"`, which resolves to `/js/app.js` in the browser (root-relative)
-**Solution**: Rewrite to `src="/file/js/app.js"` so assets are requested through the proxy
+**Solution**: Rewrite to `src="/files/js/app.js"` so assets are requested through the proxy
 
 **Caveat**: The upstream file manager (port 9998) has assets at `/js/` and `/css/`, NOT `/files/js/` and `/files/css/`:
 - HTML page: `/files` → `/files` (no transform, returns HTML with relative paths)
-- Asset requests: `/file/js/app.js` → `/js/app.js` (strip `/file` prefix, don't add `/files`)
+- Asset requests: `/files/js/app.js` → `/js/app.js` (strip `/files` prefix)
 
-This asymmetry requires special handling:
-1. HTML responses: rewrite relative paths to include client path prefix
-2. Asset requests matching known asset directories: strip the client path prefix and route to upstream root-relative path
+This requires special handling:
+1. HTML responses: rewrite relative paths to include `/files` path prefix
+2. Asset requests matching known asset directories: strip the `/files` prefix and route to upstream root-relative path
 
 **CRITICAL**: Forgetting the asset directory detection will cause assets to be double-prefixed:
-- ❌ WRONG: `/file/js/app.js` → `/files/js/app.js` (upstream returns 404)
-- ✅ CORRECT: `/file/js/app.js` → `/js/app.js` (upstream returns 200)
+- ❌ WRONG: `/files/js/app.js` → `/files/js/app.js` (upstream returns 404)
+- ✅ CORRECT: `/files/js/app.js` → `/js/app.js` (upstream returns 200)
