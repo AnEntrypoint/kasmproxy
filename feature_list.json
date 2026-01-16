@@ -72,9 +72,9 @@
       "id": "ROUTE_FILES_DIRECT",
       "description": "/files direct path routing to localhost:9998 (no transformation)",
       "passes": true,
-      "verified_via": "endpoint_test",
+      "verified_via": "playwriter_test",
       "status_code": 200,
-      "note": "Allows direct access to /files path without /file prefix"
+      "note": "Allows direct access to /files path without /file prefix. Verified via remote HTTPS endpoint testing."
     }
   ],
   "overall_status": "COMPLETE",
