@@ -22,15 +22,19 @@ Examples:
 - `/ssh/nested/path` → routes to `localhost:9999/ssh/nested/path`
 - `/ssh?id=123` → routes to `localhost:9999/ssh?id=123`
 
-### /file → Port 9998 (Path Transformed to /files)
+### /file → Port 9998 (Path Transformed to /files, Assets Rewritten)
 
-Requests to `/file` (and all sub-paths/queries) are routed to port **9998** with the path transformed from `/file*` to `/files*`. Basic HTTP auth is added if `VNC_PW` is set.
+Requests to `/file` (and all sub-paths/queries) are routed to port **9998**. The proxy performs:
+1. **HTML pages**: Path transformed from `/file` → `/files`, returns HTML with relative asset paths
+2. **HTML rewriting**: Relative paths (e.g., `src="js/app.js"`) rewritten to absolute proxy paths (e.g., `src="/file/js/app.js"`)
+3. **Asset requests**: Requests to `/file/js/app.js` are routed to upstream `/js/app.js` (asset prefix stripped, no /files path)
+
+This dual behavior supports both the HTML page routing and asset loading:
 
 Examples:
-- `/file` → routes to `localhost:9998/files`
-- `/file/` → routes to `localhost:9998/files/`
-- `/file/document.pdf` → routes to `localhost:9998/files/document.pdf`
-- `/file?id=123` → routes to `localhost:9998/files?id=123`
+- `/file` → upstream `/files` → returns HTML with relative paths → rewritten to `/file/js/...`, `/file/css/...`
+- `/file/js/app.js` → upstream `/js/app.js` → returns JavaScript (200 OK)
+- `/file?id=123` → upstream `/files?id=123` → returns HTML with relative paths
 
 ### Default Routes → TARGET_PORT (6901)
 
@@ -61,4 +65,8 @@ The auth header is only added if the incoming request doesn't already have autho
   - Port 9999 (/ssh): HTTP protocol
   - Port 9998 (/file): HTTP protocol
   - Port 6901 (kasmvnc) and others: HTTPS protocol
+- **HTML response body rewriting** for `/file` route:
+  - Relative asset paths (src/href) are rewritten to include the proxy path prefix
+  - Asset directory requests (`/file/js/`, `/file/css/`, `/file/images/`) bypass the `/files` transformation
+  - Only HTML content-type responses are rewritten; other content passes through unchanged
 
