@@ -37,6 +37,12 @@ function getTargetPath(path, targetPort) {
   return path;
 }
 
+// Helper function to check if port uses plain HTTP (not HTTPS)
+function isPlainHttpPort(port) {
+  // Only ports 9999 and 9998 use plain HTTP
+  return port === 9999 || port === 9998;
+}
+
 // Helper function to get basic auth header
 function getBasicAuth() {
   if (!VNC_PW) return null;
@@ -76,7 +82,9 @@ const server = http.createServer((req, res) => {
     rejectUnauthorized: false
   };
 
-  const proxyReq = http.request(options, (proxyRes) => {
+  // Choose protocol based on target port: HTTP for 9999/9998, HTTPS for others
+  const protocolModule = isPlainHttpPort(targetPort) ? http : https;
+  const proxyReq = protocolModule.request(options, (proxyRes) => {
     // Cache auth credentials if request succeeds (non-401)
     if (proxyRes.statusCode !== 401 && headers.authorization) {
       cachedAuth = headers.authorization;
@@ -100,35 +108,53 @@ server.on('upgrade', (req, socket, head) => {
 
   const targetPort = getTargetPort(req.url);
   const targetPath = getTargetPath(req.url, targetPort);
+  const isPlainHttp = isPlainHttpPort(targetPort);
 
   const targetSocket = net.connect(targetPort, TARGET_HOST, () => {
-    const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
+    // For HTTPS ports, wrap with TLS. For HTTP ports, use socket directly.
+    const workingSocket = isPlainHttp ? targetSocket : tls.connect({
+      socket: targetSocket,
+      rejectUnauthorized: false,
+      servername: TARGET_HOST
+    });
 
-    // Add basic auth if VNC_PW is set and not already authenticated
-    const basicAuth = getBasicAuth();
-    if (basicAuth && !headers.authorization) {
-      headers.authorization = basicAuth;
+    const handleConnection = () => {
+      const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
+
+      // Add basic auth if VNC_PW is set and not already authenticated
+      const basicAuth = getBasicAuth();
+      if (basicAuth && !headers.authorization) {
+        headers.authorization = basicAuth;
+      }
+
+      // Inject cached auth if WebSocket request doesn't have auth
+      if (!headers.authorization && cachedAuth) {
+        headers.authorization = cachedAuth;
+        console.log('Injected cached auth into WebSocket');
+      }
+
+      let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
+      for (const [key, value] of Object.entries(headers)) {
+        upgradeRequest += `${key}: ${value}\r\n`;
+      }
+      upgradeRequest += '\r\n';
+
+      workingSocket.write(upgradeRequest);
+      if (head.length) workingSocket.write(head);
+
+      workingSocket.pipe(socket);
+      socket.pipe(workingSocket);
+
+      workingSocket.on('error', () => socket.destroy());
+    };
+
+    if (isPlainHttp) {
+      // For plain HTTP, connection is ready immediately
+      handleConnection();
+    } else {
+      // For TLS, wait for secure connection
+      workingSocket.on('secureConnect', handleConnection);
     }
-
-    // Inject cached auth if WebSocket request doesn't have auth
-    if (!headers.authorization && cachedAuth) {
-      headers.authorization = cachedAuth;
-      console.log('Injected cached auth into WebSocket');
-    }
-
-    let upgradeRequest = `${req.method} ${targetPath} HTTP/1.1\r\n`;
-    for (const [key, value] of Object.entries(headers)) {
-      upgradeRequest += `${key}: ${value}\r\n`;
-    }
-    upgradeRequest += '\r\n';
-
-    targetSocket.write(upgradeRequest);
-    if (head.length) targetSocket.write(head);
-
-    targetSocket.pipe(socket);
-    socket.pipe(targetSocket);
-
-    targetSocket.on('error', () => socket.destroy());
   });
 
   targetSocket.on('error', () => socket.destroy());
