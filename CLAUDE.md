@@ -1,18 +1,18 @@
 # Implementation Notes
 
-## /shell Routing Constraint
+## /ssh Routing Constraint
 
 ### Gotcha: Path Matching Precision
 
-When implementing the `/shell` routing constraint, be aware of partial matching:
-- ❌ WRONG: `path.startsWith('/shell')` - matches `/shells` and `/shellfish` incorrectly
-- ✅ CORRECT: `path === '/shell' || path.startsWith('/shell/') || path.startsWith('/shell?')`
+When implementing the `/ssh` routing constraint, be aware of partial matching:
+- ❌ WRONG: `path.startsWith('/ssh')` - matches `/sshs` and `/sshfish` incorrectly
+- ✅ CORRECT: `path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')`
 
 The correct approach handles:
-- Exact match: `/shell`
-- Subpaths: `/shell/`, `/shell/nested`
-- Query strings: `/shell?param=value`
-- Does NOT match: `/shells`, `/shellfish`, `/shell2`
+- Exact match: `/ssh`
+- Subpaths: `/ssh/`, `/ssh/nested`
+- Query strings: `/ssh?param=value`
+- Does NOT match: `/sshs`, `/sshfish`, `/ssh2`
 
 ### Important: Both HTTP and WebSocket
 

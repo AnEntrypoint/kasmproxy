@@ -13,8 +13,8 @@ let cachedAuth = null;
 
 // Helper function to determine target port based on path
 function getTargetPort(path) {
-  // Match /shell exactly, /shell/, or /shell?query
-  if (path === '/shell' || path.startsWith('/shell/') || path.startsWith('/shell?')) {
+  // Match /ssh exactly, /ssh/, or /ssh?query
+  if (path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')) {
     return 9999;
   }
   return TARGET_PORT;
