@@ -36,20 +36,29 @@ Examples:
 - `/file/js/app.js` → upstream `/js/app.js` → returns JavaScript (200 OK)
 - `/file?id=123` → upstream `/files?id=123` → returns HTML with relative paths
 
+### /files → Port 9998 (Direct Path, No Transformation)
+
+Requests to `/files` (direct upstream path) are routed to port **9998** WITHOUT path transformation:
+- `/files` → routes to `localhost:9998/files` (no transform)
+- `/files/` → routes to `localhost:9998/files/` (no transform)
+- `/files?test=1` → routes to `localhost:9998/files?test=1` (no transform)
+
+**Important**: Both `/file` (with transform) and `/files` (without transform) route to the same upstream port 9998, but use different path handling.
+
 ### Default Routes → TARGET_PORT (6901)
 
 All other paths route to the default `TARGET_PORT`:
 - `/api` → routes to `localhost:6901/api`
 - `/` → routes to `localhost:6901/`
-- `/files` (direct) → routes to `localhost:6901/files` (NOT transformed)
 
-These routes do NOT get special paths matching (e.g., `/sshs` does not match `/ssh`).
+These routes do NOT get special path matching (e.g., `/sshs` does not match `/ssh`).
 
 ## Authentication
 
 If `VNC_PW` environment variable is set, HTTP Basic Authentication is automatically added to:
 - All `/ssh` requests
 - All `/file` requests
+- All `/files` requests
 - Uses username `kasm_user` with `VNC_PW` as the password (credentials: `kasm_user:VNC_PW`)
 
 The auth header is only added if the incoming request doesn't already have authorization.
