@@ -1,5 +1,15 @@
 # Implementation Notes
 
+## Upstream Protocol: HTTP Not HTTPS
+
+**CRITICAL**: Upstream services are accessed via plain HTTP, not HTTPS.
+
+The proxy receives HTTPS connections from browsers but forwards requests to upstream services (localhost:9999, localhost:9998, etc.) using HTTP:
+- HTTP handler: Uses `http.request()` for upstream connections
+- WebSocket handler: Uses plain `net.connect()` without TLS wrapper
+
+Attempting to use HTTPS/TLS for upstream connections will cause SSL handshake errors and 502 Bad Gateway responses. The TLS connection only exists between browser and proxy, not proxy to upstream.
+
 ## Path Routing & Transformation
 
 ### Gotcha: Path Matching Precision
@@ -22,7 +32,7 @@ Some routes require path transformation:
 - `/file?id=123` → routes to port 9998 as `/files?id=123`
 
 **CRITICAL**: Path transformation must be applied in BOTH handlers:
-1. HTTP request handler: `path: targetPath` in https.request options
+1. HTTP request handler: `path: targetPath` in http.request options
 2. WebSocket upgrade handler: `${req.method} ${targetPath}` in the upgrade request line
 
 Forgetting either one causes incorrect upstream requests.
