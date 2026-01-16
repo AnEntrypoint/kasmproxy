@@ -11,15 +11,25 @@ const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8000');
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
 
+// Helper function to determine target port based on path
+function getTargetPort(path) {
+  // Match /shell exactly, /shell/, or /shell?query
+  if (path === '/shell' || path.startsWith('/shell/') || path.startsWith('/shell?')) {
+    return 9999;
+  }
+  return TARGET_PORT;
+}
+
 const server = http.createServer((req, res) => {
+  const targetPort = getTargetPort(req.url);
   const options = {
     hostname: TARGET_HOST,
-    port: TARGET_PORT,
+    port: targetPort,
     path: req.url,
     method: req.method,
     headers: {
       ...req.headers,
-      host: `${TARGET_HOST}:${TARGET_PORT}`
+      host: `${TARGET_HOST}:${targetPort}`
     },
     rejectUnauthorized: false
   };
@@ -46,13 +56,14 @@ const server = http.createServer((req, res) => {
 server.on('upgrade', (req, socket, head) => {
   console.log('WebSocket upgrade:', req.url);
 
-  const targetSocket = net.connect(TARGET_PORT, TARGET_HOST, () => {
+  const targetPort = getTargetPort(req.url);
+  const targetSocket = net.connect(targetPort, TARGET_HOST, () => {
     const secureSocket = tls.connect({
       socket: targetSocket,
       rejectUnauthorized: false,
       servername: TARGET_HOST
     }, () => {
-      const headers = { ...req.headers, host: `${TARGET_HOST}:${TARGET_PORT}` };
+      const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
 
       // Inject cached auth if WebSocket request doesn't have auth
       if (!headers.authorization && cachedAuth) {
