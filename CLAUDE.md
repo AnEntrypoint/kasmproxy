@@ -82,3 +82,24 @@ WebSocket auth is cached from successful HTTP responses:
 - Manual VNC_PW auth is also added to WebSocket if VNC_PW is set
 
 **Gotcha**: Order matters. Check VNC_PW first, then use cached auth as fallback, to ensure consistent auth behavior.
+
+## HTML Response Body Rewriting
+
+### Relative Asset Paths Must Be Rewritten
+
+When proxying responses that contain HTML with relative asset paths, they must be rewritten to be relative to the proxy path:
+
+**Problem**: Upstream returns `src="js/app.js"`, which resolves to `/js/app.js` in the browser (root-relative)
+**Solution**: Rewrite to `src="/file/js/app.js"` so assets are requested through the proxy
+
+**Caveat**: The upstream file manager (port 9998) has assets at `/js/` and `/css/`, NOT `/files/js/` and `/files/css/`:
+- HTML page: `/files` → `/files` (no transform, returns HTML with relative paths)
+- Asset requests: `/file/js/app.js` → `/js/app.js` (strip `/file` prefix, don't add `/files`)
+
+This asymmetry requires special handling:
+1. HTML responses: rewrite relative paths to include client path prefix
+2. Asset requests matching known asset directories: strip the client path prefix and route to upstream root-relative path
+
+**CRITICAL**: Forgetting the asset directory detection will cause assets to be double-prefixed:
+- ❌ WRONG: `/file/js/app.js` → `/files/js/app.js` (upstream returns 404)
+- ✅ CORRECT: `/file/js/app.js` → `/js/app.js` (upstream returns 200)
