@@ -67,6 +67,14 @@
         "/file/doc.pdf → localhost:9998/files/doc.pdf",
         "/file?id=123 → localhost:9998/files?id=123"
       ]
+    },
+    {
+      "id": "ROUTE_FILES_DIRECT",
+      "description": "/files direct path routing to localhost:9998 (no transformation)",
+      "passes": true,
+      "verified_via": "endpoint_test",
+      "status_code": 200,
+      "note": "Allows direct access to /files path without /file prefix"
     }
   ],
   "overall_status": "COMPLETE",
