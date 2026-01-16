@@ -61,6 +61,12 @@ const server = http.createServer((req, res) => {
     headers.authorization = basicAuth;
   }
 
+  // Inject cached auth if HTTP request doesn't have auth
+  if (!headers.authorization && cachedAuth) {
+    headers.authorization = cachedAuth;
+    console.log('Injected cached auth into HTTP request');
+  }
+
   const options = {
     hostname: TARGET_HOST,
     port: targetPort,
