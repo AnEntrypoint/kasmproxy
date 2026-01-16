@@ -14,4 +14,12 @@
 
 [Coding] Implemented SUBPATH_ROUTING: Precise path matching for /ssh and /file with subpaths and query strings. Verified via logic test covering 8 routing scenarios.
 
-Session Status: All features implemented and verified. No outstanding issues. All endpoints returning 200 status.
+[Coding] Fixed PROTOCOL_MISMATCH: Implemented dynamic protocol selection to handle mixed HTTP/HTTPS upstream services:
+  - Port 6901 (kasmvnc): HTTPS protocol
+  - Port 9999 (/ssh): HTTP protocol
+  - Port 9998 (/file): HTTP protocol
+  - Other ports: HTTPS protocol (default)
+  This fixed desk.acc.l-inc.co.za proxy errors (502 → fixed).
+  Verified via real request tests: 0 proxy errors across all endpoints.
+
+Session Status: All features implemented and verified. Proxy error for desk.acc.l-inc.co.za fixed and verified working.
