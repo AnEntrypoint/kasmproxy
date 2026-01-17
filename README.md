@@ -7,7 +7,7 @@ SSL/WS proxy: HTTP(S) to HTTPS WebSocket bridge for Kasm workspaces.
 Environment variables:
 - `TARGET_HOST` (default: `localhost`) - Target host to proxy requests to
 - `TARGET_PORT` (default: `6901`) - Default target port for proxied requests
-- `LISTEN_PORT` (default: `8000`) - Port for kasmproxy to listen on
+- `LISTEN_PORT` (default: `80`) - Port for kasmproxy to listen on
 - `VNC_PW` (optional) - VNC password for HTTP basic auth (empty username, VNC_PW as password)
 
 ## Routing Constraints
