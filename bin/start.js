@@ -139,11 +139,7 @@ function rewriteHtmlPaths(html, clientPath) {
 
 // Helper function to check if path requires auth
 function pathRequiresAuth(path, targetPort) {
-  // Claude Code UI (port 9997) has its own auth system - skip basic auth
-  if (targetPort === 9997) {
-    return false;
-  }
-  // Auth required for ALL other routes when VNC_PW is set
+  // Auth required for ALL routes when VNC_PW is set (including port 9997)
   return true;
 }
 
