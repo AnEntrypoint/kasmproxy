@@ -121,9 +121,12 @@ function rewriteHtmlPaths(html, clientPath) {
   // Special handling for /ui (Claude Code UI) - rewrite absolute paths
   // This ONLY applies to /ui, not /files, /ssh, or root
   if (clientPath === '/ui') {
-    // Rewrite absolute paths like /assets/, /api/, /ws/, /shell/ to /ui/assets/, etc.
+    // Rewrite absolute paths like /assets/, /icons/, /favicon to /ui/assets/, etc.
     rewritten = rewritten
       .replace(/\b(src|href)=["'](\/assets\/[^"']+)["']/g, (match, attr, path) => {
+        return `${attr}="/ui${path}"`;
+      })
+      .replace(/\b(src|href)=["'](\/icons\/[^"']+)["']/g, (match, attr, path) => {
         return `${attr}="/ui${path}"`;
       })
       .replace(/\b(src|href)=["'](\/favicon[^"']+)["']/g, (match, attr, path) => {
