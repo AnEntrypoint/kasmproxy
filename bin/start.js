@@ -178,6 +178,10 @@ const server = http.createServer((req, res) => {
     host: `${TARGET_HOST}:${targetPort}`
   };
 
+  // Remove Accept-Encoding to prevent compressed responses
+  // We need to read/modify HTML bodies, can't do that with gzip
+  delete headers['accept-encoding'];
+
   // Add basic auth if VNC_PW is set and not already authenticated
   const basicAuth = getBasicAuth();
   if (basicAuth && !headers.authorization) {
