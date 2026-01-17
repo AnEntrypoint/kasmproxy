@@ -6,7 +6,7 @@ const net = require('net');
 
 const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
 const TARGET_PORT = parseInt(process.env.TARGET_PORT || '6901');
-const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8000');
+const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
 const VNC_PW = process.env.VNC_PW || '';
 
 // Store credentials from successful HTTP auth to use for WebSocket
