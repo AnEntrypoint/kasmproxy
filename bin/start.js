@@ -118,6 +118,19 @@ function rewriteHtmlPaths(html, clientPath) {
   // This makes the WebSocket connect through the proxy instead of directly to localhost
   rewritten = rewritten.replace(/"url":"http:\/\/localhost:\d+"/g, '"url":""');
 
+  // Special handling for /ui (Claude Code UI) - rewrite absolute paths
+  // This ONLY applies to /ui, not /files, /ssh, or root
+  if (clientPath === '/ui') {
+    // Rewrite absolute paths like /assets/, /api/, /ws/, /shell/ to /ui/assets/, etc.
+    rewritten = rewritten
+      .replace(/\b(src|href)=["'](\/assets\/[^"']+)["']/g, (match, attr, path) => {
+        return `${attr}="/ui${path}"`;
+      })
+      .replace(/\b(src|href)=["'](\/favicon[^"']+)["']/g, (match, attr, path) => {
+        return `${attr}="/ui${path}"`;
+      });
+  }
+
   return rewritten;
 }
 
