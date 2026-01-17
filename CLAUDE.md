@@ -4,7 +4,7 @@
 
 **CRITICAL**: Upstream protocols are selected dynamically based on target port:
 
-- **Ports 9999 (/ssh) and 9998 (/files, /api)**: Plain HTTP via `http.request()` and raw `net.connect()`
+- **Ports 9999 (/ssh), 9998 (/files), and 9997 (/ui, /api, /ws)**: Plain HTTP via `http.request()` and raw `net.connect()`
 - **Port 6901 (kasmvnc) and other ports**: HTTPS via `https.request()` with TLS wrapping
 
 The proxy receives HTTPS connections from browsers but uses different protocols for upstream depending on the service:
@@ -64,16 +64,18 @@ Not updating this header will cause requests to still reference the wrong port i
 
 ### VNC_PW Environment Variable
 
-Basic auth is automatically added to `/ssh`, `/files`, and `/api` routes when `VNC_PW` is set:
+Basic auth is automatically added to ALL routes (including `/ui`) when `VNC_PW` is set:
 - Credentials format: `kasm_user` username + VNC_PW as password
 - Base64 encoded: `Basic a2FzbV91c2VyOmZvb2Jhcg==` (for username "kasm_user" and password "foobar")
 - Header: `Authorization: Basic BASE64_ENCODED_CREDENTIALS`
 
 ### Auth Enforcement on Proxy
 
-When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on:
-1. HTTP requests to `/ssh`, `/files`, and `/api` routes (returns 401 if auth invalid)
-2. WebSocket upgrade requests to `/ssh`, `/files`, and `/api` routes (closes connection if auth invalid)
+When `VNC_PW` is set, the proxy enforces HTTP Basic Authentication on ALL routes:
+1. HTTP requests to `/ssh`, `/files`, `/ui`, `/api`, and `/ws` routes (returns 401 if auth invalid)
+2. WebSocket upgrade requests to all routes (closes connection if auth invalid)
+
+**Note**: Previously port 9997 (Claude Code UI at `/ui`, `/api`, `/ws`) was excluded from auth. As of the latest update, it now requires HTTP Basic Auth like all other services.
 
 ### Auth Header Precedence
 
@@ -112,3 +114,25 @@ This requires special handling:
 **CRITICAL**: Forgetting the asset directory detection will cause assets to be double-prefixed:
 - ❌ WRONG: `/files/js/app.js` → `/files/js/app.js` (upstream returns 404)
 - ✅ CORRECT: `/files/js/app.js` → `/js/app.js` (upstream returns 200)
+
+### Special Handling for /ui Route (Claude Code UI)
+
+The `/ui` route (port 9997) requires special absolute path rewriting:
+
+**Problem**: Claude Code UI serves assets at absolute paths like `/icons/claude-ai-icon.svg`, `/assets/main.js`, `/favicon.ico`
+
+**Solution**: Rewrite absolute asset paths in HTML to include the `/ui` prefix:
+- `/icons/claude-ai-icon.svg` → `/ui/icons/claude-ai-icon.svg`
+- `/assets/main.js` → `/ui/assets/main.js`
+- `/favicon.ico` → `/ui/favicon.ico`
+
+**Implementation**: The `rewriteHtmlPaths()` function checks `if (clientPath === '/ui')` and applies additional regex replacements for `/assets/`, `/icons/`, and `/favicon` paths.
+
+**CRITICAL**: This rewriting ONLY applies to the `/ui` route, NOT to `/files`, `/ssh`, or root paths.
+
+**Gotcha**: When the browser requests `/ui/icons/claude-ai-icon.svg`, the proxy:
+1. Routes to port 9997 (matches `/ui` prefix in `getTargetPort()`)
+2. Strips `/ui` prefix (in `getTargetPath()`) → upstream receives `/icons/claude-ai-icon.svg`
+3. Upstream serves the icon from its `/icons/` directory
+
+The path transformation ensures the proxy path `/ui/icons/...` correctly maps to upstream `/icons/...` while keeping assets under the `/ui` namespace for the browser.
