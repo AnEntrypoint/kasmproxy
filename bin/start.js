@@ -18,13 +18,15 @@ function getTargetPort(path) {
   if (path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')) {
     return 9999;
   }
-  // Match /files and /api routes to port 9998
-  if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?') ||
-      path === '/api' || path.startsWith('/api/') || path.startsWith('/api?')) {
+  // Match /files routes to port 9998 (file-manager)
+  if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
     return 9998;
   }
-  // Match /ui routes to Claude Code UI on port 9997
-  if (path === '/ui' || path.startsWith('/ui/') || path.startsWith('/ui?')) {
+  // Match /ui routes, /api routes, and /ws routes to Claude Code UI on port 9997
+  // (Claude Code UI frontend requests /api/* and /ws without /ui prefix)
+  if (path === '/ui' || path.startsWith('/ui/') || path.startsWith('/ui?') ||
+      path === '/api' || path.startsWith('/api/') || path.startsWith('/api?') ||
+      path === '/ws' || path.startsWith('/ws/') || path.startsWith('/ws?')) {
     return 9997;
   }
   return TARGET_PORT;
@@ -55,13 +57,6 @@ function getTargetPath(path, targetPort) {
     if (path.startsWith('/files?')) {
       return '/' + path.substring(6); // /files?x -> /?x
     }
-    // Also handle /api routes
-    if (path === '/api') {
-      return '/api';
-    }
-    if (path.startsWith('/api/') || path.startsWith('/api?')) {
-      return path; // Keep /api paths as-is
-    }
   }
   if (targetPort === 9997) {
     // Strip /ui prefix for Claude Code UI
@@ -73,6 +68,11 @@ function getTargetPath(path, targetPort) {
     }
     if (path.startsWith('/ui?')) {
       return '/' + path.substring(3); // /ui?x -> /?x
+    }
+    // Keep standalone /api and /ws paths as-is (Claude Code UI frontend uses these)
+    if (path === '/api' || path.startsWith('/api/') || path.startsWith('/api?') ||
+        path === '/ws' || path.startsWith('/ws/') || path.startsWith('/ws?')) {
+      return path;
     }
   }
   // All other paths pass through as-is
@@ -136,7 +136,11 @@ function rewriteHtmlPaths(html, clientPath) {
 
 // Helper function to check if path requires auth
 function pathRequiresAuth(path, targetPort) {
-  // Auth required for ALL routes when VNC_PW is set
+  // Claude Code UI (port 9997) has its own auth system - skip basic auth
+  if (targetPort === 9997) {
+    return false;
+  }
+  // Auth required for ALL other routes when VNC_PW is set
   return true;
 }
 
