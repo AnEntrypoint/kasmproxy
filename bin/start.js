@@ -23,19 +23,56 @@ function getTargetPort(path) {
       path === '/api' || path.startsWith('/api/') || path.startsWith('/api?')) {
     return 9998;
   }
+  // Match /ui routes to Claude Code UI on port 9997
+  if (path === '/ui' || path.startsWith('/ui/') || path.startsWith('/ui?')) {
+    return 9997;
+  }
   return TARGET_PORT;
 }
 
 // Helper function to transform path based on routing
 function getTargetPath(path, targetPort) {
+  if (targetPort === 9999) {
+    // Strip /ssh prefix for ttyd terminal
+    if (path === '/ssh') {
+      return '/';
+    }
+    if (path.startsWith('/ssh/')) {
+      return path.substring(4); // /ssh/x -> /x
+    }
+    if (path.startsWith('/ssh?')) {
+      return '/' + path.substring(4); // /ssh?x -> /?x
+    }
+  }
   if (targetPort === 9998) {
-    // Assets are at root paths on upstream (e.g., /js/app.js, /css/style.css)
-    // But browser requests them as /files/js/app.js, /files/css/style.css
-    // Strip /files prefix for asset directories
-    if (path.startsWith('/files/js/') || path.startsWith('/files/css/') ||
-        path.startsWith('/files/images/') || path.startsWith('/files/webfonts/') ||
-        path.startsWith('/files/api/')) {
-      return path.substring(6); // /files/js/x -> /js/x
+    // Strip /files prefix for file manager
+    if (path === '/files') {
+      return '/';
+    }
+    if (path.startsWith('/files/')) {
+      return path.substring(6); // /files/x -> /x
+    }
+    if (path.startsWith('/files?')) {
+      return '/' + path.substring(6); // /files?x -> /?x
+    }
+    // Also handle /api routes
+    if (path === '/api') {
+      return '/api';
+    }
+    if (path.startsWith('/api/') || path.startsWith('/api?')) {
+      return path; // Keep /api paths as-is
+    }
+  }
+  if (targetPort === 9997) {
+    // Strip /ui prefix for Claude Code UI
+    if (path === '/ui') {
+      return '/';
+    }
+    if (path.startsWith('/ui/')) {
+      return path.substring(3); // /ui/x -> /x
+    }
+    if (path.startsWith('/ui?')) {
+      return '/' + path.substring(3); // /ui?x -> /?x
     }
   }
   // All other paths pass through as-is
@@ -44,8 +81,8 @@ function getTargetPath(path, targetPort) {
 
 // Helper function to check if port uses plain HTTP (not HTTPS)
 function isPlainHttpPort(port) {
-  // Only ports 9999 and 9998 use plain HTTP
-  return port === 9999 || port === 9998;
+  // Ports 9999, 9998, and 9997 use plain HTTP
+  return port === 9999 || port === 9998 || port === 9997;
 }
 
 // Helper function to get basic auth header
@@ -182,10 +219,12 @@ const server = http.createServer((req, res) => {
         }
 
         // Update content-length since body may have changed
-        res.writeHead(proxyRes.statusCode, {
-          ...proxyRes.headers,
-          'content-length': Buffer.byteLength(rewrittenBody)
-        });
+        // Remove transfer-encoding since we're setting content-length (they conflict)
+        const responseHeaders = { ...proxyRes.headers };
+        delete responseHeaders['transfer-encoding'];
+        responseHeaders['content-length'] = Buffer.byteLength(rewrittenBody);
+
+        res.writeHead(proxyRes.statusCode, responseHeaders);
         res.end(rewrittenBody);
       });
     } else {
