@@ -119,7 +119,6 @@ function rewriteHtmlPaths(html, clientPath) {
   rewritten = rewritten.replace(/"url":"http:\/\/localhost:\d+"/g, '"url":""');
 
   // Special handling for /ui (Claude Code UI) - rewrite absolute paths
-  // This ONLY applies to /ui, not /files, /ssh, or root
   if (clientPath === '/ui') {
     // Rewrite absolute paths like /assets/, /icons/, /favicon to /ui/assets/, etc.
     rewritten = rewritten
@@ -132,6 +131,15 @@ function rewriteHtmlPaths(html, clientPath) {
       .replace(/\b(src|href)=["'](\/favicon[^"']+)["']/g, (match, attr, path) => {
         return `${attr}="/ui${path}"`;
       });
+  }
+
+  // Special handling for /files (NHFS file manager) - rewrite absolute paths
+  if (clientPath === '/files') {
+    // Rewrite all absolute paths that don't already have /files prefix
+    // href="/foo" -> href="/files/foo", href="/" -> href="/files/"
+    rewritten = rewritten.replace(/\b(src|href)=["'](\/(?!files\/|files"|files')[^"']*)["']/g, (match, attr, path) => {
+      return `${attr}="/files${path}"`;
+    });
   }
 
   return rewritten;
