@@ -11,12 +11,8 @@ const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
 const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
 const SELKIES_WS_PORT = 8082;
 
-const VNC_PW = process.env.PASSWORD || process.env.VNC_PW || '';
-console.log(`[kasmproxy] VNC_PW source: ${process.env.PASSWORD ? 'PASSWORD' : process.env.VNC_PW ? 'VNC_PW' : 'default(empty)'}`);
-console.log(`[kasmproxy] Auth enabled: ${!!VNC_PW}`);
-if (VNC_PW) {
-  console.log(`[kasmproxy] VNC_PW: ${VNC_PW.substring(0, 3)}***`);
-}
+const PASSWORD = process.env.PASSWORD || '';
+console.log(`[kasmproxy] PASSWORD: ${PASSWORD ? PASSWORD.substring(0, 3) + '***' : '(not set)'}`);
 
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
@@ -139,9 +135,9 @@ function isPlainHttpPort(port) {
 
 // Helper function to get basic auth header
 function getBasicAuth() {
-  if (!VNC_PW) return null;
+  if (!PASSWORD) return null;
   // Use kasm_user username with VNC password
-  const credentials = 'kasm_user:' + VNC_PW;
+  const credentials = 'kasm_user:' + PASSWORD;
   const encoded = Buffer.from(credentials).toString('base64');
   return 'Basic ' + encoded;
 }
@@ -203,7 +199,7 @@ function pathRequiresAuth(path, targetPort) {
   if (targetPort === SELKIES_WS_PORT) {
     return false;
   }
-  // Auth required for ALL other routes when VNC_PW is set (including port 9997)
+  // Auth required for ALL other routes when PASSWORD is set (including port 9997)
   return true;
 }
 
@@ -215,8 +211,8 @@ function checkAuth(authHeader) {
 
   try {
     const decoded = Buffer.from(credentials, 'base64').toString();
-    // Expected format: kasm_user:VNC_PW
-    if (decoded !== 'kasm_user:' + VNC_PW) return false;
+    // Expected format: kasm_user:PASSWORD
+    if (decoded !== 'kasm_user:' + PASSWORD) return false;
     return true;
   } catch {
     return false;
@@ -228,8 +224,8 @@ const server = http.createServer((req, res) => {
   const targetPath = getTargetPath(req.url, targetPort);
   const clientPath = req.url.split('?')[0]; // Get path without query string
 
-  // Check auth if VNC_PW is set and this port requires auth
-  if (VNC_PW && pathRequiresAuth(req.url, targetPort)) {
+  // Check auth if PASSWORD is set and this port requires auth
+  if (PASSWORD && pathRequiresAuth(req.url, targetPort)) {
     if (!checkAuth(req.headers.authorization)) {
       res.writeHead(401, {
         'WWW-Authenticate': 'Basic realm="kasmproxy"',
@@ -249,7 +245,7 @@ const server = http.createServer((req, res) => {
   // We need to read/modify HTML bodies, can't do that with gzip
   delete headers['accept-encoding'];
 
-  // Add basic auth if VNC_PW is set and not already authenticated
+  // Add basic auth if PASSWORD is set and not already authenticated
   const basicAuth = getBasicAuth();
   if (basicAuth && !headers.authorization) {
     headers.authorization = basicAuth;
@@ -334,8 +330,8 @@ server.on('upgrade', (req, socket, head) => {
   const targetPath = getTargetPath(req.url, targetPort);
   const isPlainHttp = isPlainHttpPort(targetPort);
 
-  // Check auth if VNC_PW is set and this port requires auth
-  if (VNC_PW && pathRequiresAuth(req.url, targetPort)) {
+  // Check auth if PASSWORD is set and this port requires auth
+  if (PASSWORD && pathRequiresAuth(req.url, targetPort)) {
     if (!checkAuth(req.headers.authorization)) {
       socket.write('HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm="kasmproxy"\r\nContent-Length: 0\r\n\r\n');
       socket.destroy();
@@ -360,7 +356,7 @@ server.on('upgrade', (req, socket, head) => {
 
       const headers = { ...req.headers, host: `${TARGET_HOST}:${targetPort}` };
 
-      // Add basic auth if VNC_PW is set and not already authenticated
+      // Add basic auth if PASSWORD is set and not already authenticated
       const basicAuth = getBasicAuth();
       if (basicAuth && !headers.authorization) {
         headers.authorization = basicAuth;
