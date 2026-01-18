@@ -5,12 +5,18 @@ const tls = require('tls');
 const net = require('net');
 
 const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
-const CUSTOM_PORT = parseInt(process.env.CUSTOM_PORT || '3000');  // Webtop UI port (LinuxServer webtop)
-const TARGET_PORT = parseInt(process.env.TARGET_PORT || CUSTOM_PORT);  // Fallback to CUSTOM_PORT for backwards compatibility
+const CUSTOM_PORT = parseInt(process.env.CUSTOM_PORT || '3000');
+const TARGET_PORT = parseInt(process.env.TARGET_PORT || CUSTOM_PORT);
 const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
-const VNC_PW = process.env.VNC_PW || '';
-const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';  // Normalized path without trailing slash
-const SELKIES_WS_PORT = 8082;  // Selkies WebSocket port (no auth needed)
+const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
+const SELKIES_WS_PORT = 8082;
+
+const VNC_PW = process.env.PASSWORD || process.env.VNC_PW || '';
+console.log(`[kasmproxy] VNC_PW source: ${process.env.PASSWORD ? 'PASSWORD' : process.env.VNC_PW ? 'VNC_PW' : 'default(empty)'}`);
+console.log(`[kasmproxy] Auth enabled: ${!!VNC_PW}`);
+if (VNC_PW) {
+  console.log(`[kasmproxy] VNC_PW: ${VNC_PW.substring(0, 3)}***`);
+}
 
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
