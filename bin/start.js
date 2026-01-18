@@ -5,84 +5,130 @@ const tls = require('tls');
 const net = require('net');
 
 const TARGET_HOST = process.env.TARGET_HOST || 'localhost';
-const TARGET_PORT = parseInt(process.env.TARGET_PORT || '6901');
+const CUSTOM_PORT = parseInt(process.env.CUSTOM_PORT || '3000');  // Webtop UI port (LinuxServer webtop)
+const TARGET_PORT = parseInt(process.env.TARGET_PORT || CUSTOM_PORT);  // Fallback to CUSTOM_PORT for backwards compatibility
 const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
 const VNC_PW = process.env.VNC_PW || '';
+const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';  // Normalized path without trailing slash
+const SELKIES_WS_PORT = 8082;  // Selkies WebSocket port (no auth needed)
 
 // Store credentials from successful HTTP auth to use for WebSocket
 let cachedAuth = null;
 
-// Helper function to determine target port based on path
+// Helper function to strip SUBFOLDER prefix from request path
+function stripSubfolder(fullPath) {
+  if (SUBFOLDER === '/') return fullPath;
+
+  // Remove query string for comparison
+  const pathOnly = fullPath.split('?')[0];
+
+  if (pathOnly === SUBFOLDER.slice(0, -1) || pathOnly === SUBFOLDER) {
+    return '/';
+  }
+
+  if (pathOnly.startsWith(SUBFOLDER)) {
+    return pathOnly.slice(SUBFOLDER.length - 1) + (fullPath.includes('?') ? '?' + fullPath.split('?')[1] : '');
+  }
+
+  // Path doesn't match SUBFOLDER, return as-is
+  return fullPath;
+}
+
+// Helper function to determine target port based on path (after SUBFOLDER stripping)
 function getTargetPort(path) {
+  // Strip SUBFOLDER prefix first
+  const strippedPath = stripSubfolder(path);
+
+  // Match /data/* routes to Selkies WebSocket (port 8082, no auth)
+  if (strippedPath === '/data' || strippedPath.startsWith('/data/') || strippedPath.startsWith('/data?')) {
+    return SELKIES_WS_PORT;
+  }
+  // Match /ws/* routes to Selkies WebSocket (port 8082, no auth)
+  // Note: /ws/* here is Selkies, not Claude Code UI /ws (which is /ws/claude)
+  if (strippedPath === '/ws' || strippedPath.startsWith('/ws/') || strippedPath.startsWith('/ws?')) {
+    // Check if it's /ws/claude (Claude Code UI) vs /ws/* (Selkies)
+    if (strippedPath === '/ws' || strippedPath.startsWith('/ws/')) {
+      // Selkies uses /ws/* for WebSocket streaming
+      return SELKIES_WS_PORT;
+    }
+  }
   // Match /ssh exactly, /ssh/, or /ssh?query
-  if (path === '/ssh' || path.startsWith('/ssh/') || path.startsWith('/ssh?')) {
+  if (strippedPath === '/ssh' || strippedPath.startsWith('/ssh/') || strippedPath.startsWith('/ssh?')) {
     return 9999;
   }
   // Match /files routes to port 9998 (file-manager)
-  if (path === '/files' || path.startsWith('/files/') || path.startsWith('/files?')) {
+  if (strippedPath === '/files' || strippedPath.startsWith('/files/') || strippedPath.startsWith('/files?')) {
     return 9998;
   }
   // Match /ui routes, /api routes, and /ws routes to Claude Code UI on port 9997
   // (Claude Code UI frontend requests /api/* and /ws without /ui prefix)
-  if (path === '/ui' || path.startsWith('/ui/') || path.startsWith('/ui?') ||
-      path === '/api' || path.startsWith('/api/') || path.startsWith('/api?') ||
-      path === '/ws' || path.startsWith('/ws/') || path.startsWith('/ws?')) {
+  if (strippedPath === '/ui' || strippedPath.startsWith('/ui/') || strippedPath.startsWith('/ui?') ||
+      strippedPath === '/api' || strippedPath.startsWith('/api/') || strippedPath.startsWith('/api?') ||
+      strippedPath === '/ws' || strippedPath.startsWith('/ws/') || strippedPath.startsWith('/ws?')) {
     return 9997;
   }
-  return TARGET_PORT;
+  return TARGET_PORT;  // Default to Webtop web UI (CUSTOM_PORT)
 }
 
-// Helper function to transform path based on routing
+// Helper function to transform path based on routing (handles SUBFOLDER stripping and port-specific transformations)
 function getTargetPath(path, targetPort) {
+  // First strip SUBFOLDER prefix
+  const strippedPath = stripSubfolder(path);
+
+  // Selkies WebSocket routes - no path transformation needed
+  if (targetPort === SELKIES_WS_PORT) {
+    return strippedPath;  // Already stripped of SUBFOLDER
+  }
+
   if (targetPort === 9999) {
     // Strip /ssh prefix for ttyd terminal
-    if (path === '/ssh') {
+    if (strippedPath === '/ssh') {
       return '/';
     }
-    if (path.startsWith('/ssh/')) {
-      return path.substring(4); // /ssh/x -> /x
+    if (strippedPath.startsWith('/ssh/')) {
+      return strippedPath.substring(4); // /ssh/x -> /x
     }
-    if (path.startsWith('/ssh?')) {
-      return '/' + path.substring(4); // /ssh?x -> /?x
+    if (strippedPath.startsWith('/ssh?')) {
+      return '/' + strippedPath.substring(4); // /ssh?x -> /?x
     }
   }
   if (targetPort === 9998) {
     // Strip /files prefix for file manager
-    if (path === '/files') {
+    if (strippedPath === '/files') {
       return '/';
     }
-    if (path.startsWith('/files/')) {
-      return path.substring(6); // /files/x -> /x
+    if (strippedPath.startsWith('/files/')) {
+      return strippedPath.substring(6); // /files/x -> /x
     }
-    if (path.startsWith('/files?')) {
-      return '/' + path.substring(6); // /files?x -> /?x
+    if (strippedPath.startsWith('/files?')) {
+      return '/' + strippedPath.substring(6); // /files?x -> /?x
     }
   }
   if (targetPort === 9997) {
     // Strip /ui prefix for Claude Code UI
-    if (path === '/ui') {
+    if (strippedPath === '/ui') {
       return '/';
     }
-    if (path.startsWith('/ui/')) {
-      return path.substring(3); // /ui/x -> /x
+    if (strippedPath.startsWith('/ui/')) {
+      return strippedPath.substring(3); // /ui/x -> /x
     }
-    if (path.startsWith('/ui?')) {
-      return '/' + path.substring(3); // /ui?x -> /?x
+    if (strippedPath.startsWith('/ui?')) {
+      return '/' + strippedPath.substring(3); // /ui?x -> /?x
     }
     // Keep standalone /api and /ws paths as-is (Claude Code UI frontend uses these)
-    if (path === '/api' || path.startsWith('/api/') || path.startsWith('/api?') ||
-        path === '/ws' || path.startsWith('/ws/') || path.startsWith('/ws?')) {
-      return path;
+    if (strippedPath === '/api' || strippedPath.startsWith('/api/') || strippedPath.startsWith('/api?') ||
+        strippedPath === '/ws' || strippedPath.startsWith('/ws/') || strippedPath.startsWith('/ws?')) {
+      return strippedPath;
     }
   }
-  // All other paths pass through as-is
-  return path;
+  // All other paths (Webtop web UI) pass through with SUBFOLDER stripped
+  return strippedPath;
 }
 
 // Helper function to check if port uses plain HTTP (not HTTPS)
 function isPlainHttpPort(port) {
-  // Ports 9999, 9998, and 9997 use plain HTTP
-  return port === 9999 || port === 9998 || port === 9997;
+  // Ports 9999 (ttyd), 9998 (file-manager), 9997 (Claude Code UI), and 8082 (Selkies) use plain HTTP
+  return port === 9999 || port === 9998 || port === 9997 || port === SELKIES_WS_PORT;
 }
 
 // Helper function to get basic auth header
@@ -147,7 +193,11 @@ function rewriteHtmlPaths(html, clientPath) {
 
 // Helper function to check if path requires auth
 function pathRequiresAuth(path, targetPort) {
-  // Auth required for ALL routes when VNC_PW is set (including port 9997)
+  // Selkies WebSocket doesn't require auth (handles its own authentication via VNC password in URL)
+  if (targetPort === SELKIES_WS_PORT) {
+    return false;
+  }
+  // Auth required for ALL other routes when VNC_PW is set (including port 9997)
   return true;
 }
 
