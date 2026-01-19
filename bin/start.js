@@ -3,7 +3,7 @@ const http = require('http');
 
 const WEBTOP_UI_PORT = 3000;
 const SELKIES_WS_PORT = 8082;
-const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8080');
+const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
 const PASSWORD = process.env.PASSWORD || '';
 const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
 
