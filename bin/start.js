@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 const http = require('http');
 
-const WEBTOP_UI_PORT = 3000;
-const SELKIES_WS_PORT = 8082;
+const WEBTOP_UI_PORT = parseInt(process.env.WEBTOP_UI_PORT || '3000');
+const SELKIES_WS_PORT = parseInt(process.env.SELKIES_WS_PORT || '8082');
 const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '80');
 const PASSWORD = process.env.PASSWORD || '';
 const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
@@ -64,6 +64,12 @@ const server = http.createServer((req, res) => {
   delete headers.host;
   delete headers.authorization;
   headers.host = `localhost:${upstreamPort}`;
+  
+  // For nginx on port 6901, add basic auth as 'abc' user
+  if (upstreamPort === 6901 && PASSWORD) {
+    const authHeader = Buffer.from(`abc:${PASSWORD}`).toString('base64');
+    headers.authorization = `Basic ${authHeader}`;
+  }
 
   const options = {
     hostname: 'localhost',
@@ -104,6 +110,12 @@ server.on('upgrade', (req, socket, head) => {
   delete headers.host;
   delete headers.authorization;
   headers.host = `localhost:${upstreamPort}`;
+  
+  // For nginx on port 6901, add basic auth as 'abc' user
+  if (upstreamPort === 6901 && PASSWORD) {
+    const authHeader = Buffer.from(`abc:${PASSWORD}`).toString('base64');
+    headers.authorization = `Basic ${authHeader}`;
+  }
 
   const options = {
     hostname: 'localhost',
