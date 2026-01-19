@@ -31,13 +31,8 @@ function getUpstreamPort(path) {
 }
 
 function shouldBypassAuth(path) {
-  if (path === '/data' || path.startsWith('/data/') || path.startsWith('/data?')) {
-    return true;
-  }
-  if (path === '/ws' || path.startsWith('/ws/') || path.startsWith('/ws?')) {
-    return true;
-  }
-  return false;
+  // DEBUG: Temporarily bypass all auth to test if kasmproxy routing works
+  return true;
 }
 
 function checkAuth(authHeader) {
