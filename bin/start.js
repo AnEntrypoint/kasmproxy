@@ -7,15 +7,6 @@ const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8080');
 const PASSWORD = process.env.PASSWORD || '';
 const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
 
-console.log(`[kasmproxy] PASSWORD type: ${typeof PASSWORD}`);
-console.log(`[kasmproxy] PASSWORD value: "${PASSWORD}"`);
-console.log(`[kasmproxy] PASSWORD length: ${PASSWORD.length}`);
-console.log(`[kasmproxy] PASSWORD is empty: ${PASSWORD === ''}`);
-console.log(`[kasmproxy] PASSWORD is falsy: ${!PASSWORD}`);
-console.log(`[kasmproxy] PASSWORD display: ${PASSWORD ? PASSWORD.substring(0, 3) + '***' : '(not set)'}`);
-console.log(`[kasmproxy] Listening on port ${LISTEN_PORT}`);
-console.log(`[kasmproxy] SUBFOLDER: ${SUBFOLDER}`);
-
 function stripSubfolder(fullPath) {
   if (SUBFOLDER === '/') return fullPath;
   const pathOnly = fullPath.split('?')[0];
@@ -36,8 +27,7 @@ function getUpstreamPort(path) {
 }
 
 function shouldBypassAuth(path) {
-  // DEBUG: Temporarily bypass all auth to test if kasmproxy routing works
-  return true;
+  return path.startsWith('/data') || path.startsWith('/ws');
 }
 
 function checkAuth(authHeader) {
