@@ -7,7 +7,12 @@ const LISTEN_PORT = parseInt(process.env.LISTEN_PORT || '8080');
 const PASSWORD = process.env.PASSWORD || '';
 const SUBFOLDER = (process.env.SUBFOLDER || '/').replace(/\/+$/, '') || '/';
 
-console.log(`[kasmproxy] PASSWORD: ${PASSWORD ? PASSWORD.substring(0, 3) + '***' : '(not set)'}`);
+console.log(`[kasmproxy] PASSWORD type: ${typeof PASSWORD}`);
+console.log(`[kasmproxy] PASSWORD value: "${PASSWORD}"`);
+console.log(`[kasmproxy] PASSWORD length: ${PASSWORD.length}`);
+console.log(`[kasmproxy] PASSWORD is empty: ${PASSWORD === ''}`);
+console.log(`[kasmproxy] PASSWORD is falsy: ${!PASSWORD}`);
+console.log(`[kasmproxy] PASSWORD display: ${PASSWORD ? PASSWORD.substring(0, 3) + '***' : '(not set)'}`);
 console.log(`[kasmproxy] Listening on port ${LISTEN_PORT}`);
 console.log(`[kasmproxy] SUBFOLDER: ${SUBFOLDER}`);
 
